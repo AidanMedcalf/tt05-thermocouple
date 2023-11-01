@@ -33,12 +33,26 @@ module tb (
         `endif
     end
 
-    wire [7:0] ui_in = { 4'b0, adc_sin, spi_sin, spi_sce, spi_sck };
+    // assign spi_sce   = uio_in[0]  && !uio_oe[0];
+    // assign spi_sin   = uio_in[1]  && !uio_oe[1];
+    // assign spi_sck   = uio_in[3]  && !uio_oe[3];
+    // assign adc_sin   = uio_in[6]  && !uio_oe[6];
+
+    assign uio_in[0] = uio_oe[0] ? uio_out[0] : spi_sce;
+    assign uio_in[1] = uio_oe[1] ? uio_out[1] : spi_sin;
+    assign spi_sout  = uio_oe[2] ? uio_out[2] : uio_in[2];
+    assign uio_in[3] = uio_oe[3] ? uio_out[3] : spi_sck;
+    assign adc_sce   = uio_oe[4] ? uio_out[4] : uio_in[4];
+    assign adc_sout  = uio_oe[5] ? uio_out[5] : uio_in[5];
+    assign uio_in[6] = uio_oe[6] ? uio_out[6] : adc_sin;
+    assign adc_sck   = uio_oe[7] ? uio_out[7] : uio_in[7];
+
+    wire [7:0] ui_in = 8'b0;
     wire [7:0] uo_out;
-    wire [7:0] uio_in = 8'b0;
+    wire [7:0] uio_in;
     wire [7:0] uio_out;
     wire [7:0] uio_oe;
-    assign { adc_sout, adc_sce, adc_sck, spi_sout } = uo_out[3:0];
+    assign { uio_in[7], uio_in[5:4], uio_in[2] } = 'b0;
 
     tt_um_thermocouple tt_um_thermocouple (
     // include power ports for the Gate Level test

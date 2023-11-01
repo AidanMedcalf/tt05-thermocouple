@@ -1,23 +1,16 @@
 `default_nettype none
 
-/* I/O MAP
- *     ui_in[0]     SCK        serial clock
- *     ui_in[1]     SCE        serial chip enable
- *     ui_in[2]     SIN        serial in (MOSI)
- *     ui_in[3]     ADC_SIN    ADC serial in (MISO)
- *     ui_in[4]     not used
- *     ui_in[5]     not used
- *     ui_in[6]     not used
- *     ui_in[7]     not used
- *     uo_out[0]    SOUT       serial out (MOSI)
- *     uo_out[1]    ADC_SCK    ADC serial clock
- *     uo_out[2]    ADC_SCE    ADC serial chip enable
- *     uo_out[3]    ADC_SOUT   ADC serial out
- *     uo_out[4]    not used
- *     uo_out[5]    not used
- *     uo_out[6]    not used
- *     uo_out[7]    not used
- *     uio_*[*]     not used
+/* I/O MAP (chosen to match dual SPI PMOD)
+ *     ui_in[7:0]   not used
+ *     uo_out[7:0]  not used
+ *     uio[0]       SCE         input     serial chip enable
+ *     uio[1]       SIN         input     serial in (MOSI)
+ *     uio[2]       SOUT        output    serial out (MISO)
+ *     uio[3]       SCK         input     serial clock
+ *     uio[4]       ADC_SCE     output    ADC serial chip enable
+ *     uio[5]       ADC_SOUT    output    ADC serial out (MOSI)
+ *     uio[6]       ADC_SIN     input     ADC serial in (MISO)
+ *     uio[7]       ADC_SCK     output    ADC serial clock
  */
 
 // TODO: serial passthrough to ADC?
@@ -35,13 +28,25 @@ module tt_um_thermocouple #(
     input  wire       rst_n     // reset_n - low to reset
 );
 
-    // bidirectionals as inputs (do not use)
-    assign uio_oe = 8'b00000000;
-    assign uio_out = 'b0;
-    // TODO: outputs
-    assign uo_out[7:4] = 'b0;
+    // bidirectional output enable
+    assign uio_oe = 8'b10110100;
+    assign { uio_out[6], uio_out[3], uio_out[1:0] } = 'b0;
+
+    // dedicated outputs to zero
+    assign uo_out = 'b0;
 
     // external clock is 10MHz
+
+    // i/o assignment
+    wire spi_sce, spi_sin, spi_sout, spi_sck, adc_sce, adc_sout, adc_sin, adc_sck;
+    assign spi_sce    = uio_in[0];
+    assign spi_sin    = uio_in[1];
+    assign uio_out[2] = spi_sout;
+    assign spi_sck    = uio_in[3];
+    assign uio_out[4] = adc_sce;
+    assign uio_out[5] = adc_sout;
+    assign adc_sin    = uio_in[6];
+    assign uio_out[7] = adc_sck;
 
     reg [WORD_SIZE-1:0] current_temp;
 
@@ -56,14 +61,14 @@ module tt_um_thermocouple #(
     // SPI master - read from adc
     spi_master #(.WORD_SIZE(WORD_SIZE)) spi_master (
         .i_clk(clk), .i_rst(!rst_n || !ena),
-        .o_sck(uo_out[1]), .o_sce(uo_out[2]), .o_sout(uo_out[3]), .i_sin(ui_in[3]),
+        .o_sck(adc_sck), .o_sce(adc_sce), .o_sout(adc_sout), .i_sin(adc_sin),
         .i_ena(adc_start), .i_win(16'b0), .o_wout(adc_word), .o_wstb(adc_stb)
     );
 
     // SPI slave
     spi_slave #(.WORD_SIZE(WORD_SIZE)) spi_slave (
         .i_clk(clk), .i_rst(!rst_n || !ena),
-        .i_sck(ui_in[0]), .i_sce(ui_in[1]), .i_sin(ui_in[2]), .o_sout(uo_out[0]),
+        .i_sck(spi_sck), .i_sce(spi_sce), .i_sin(spi_sin), .o_sout(spi_sout),
         .i_win(current_temp), .o_wout(spi_word), .o_wstb(spi_stb)
     );
 
