@@ -19,7 +19,7 @@ module spi_slave #(
     // word interface
     input      [WORD_SIZE-1:0] i_win,
     output reg [WORD_SIZE-1:0] o_wout,
-    output reg                 o_wstb
+    output                     o_wstb
 );
 
     // serial clock
