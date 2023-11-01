@@ -7,28 +7,40 @@ that can be driven / tested by the cocotb test.py
 */
 
 // testbench is controlled by test.py
-module tb ();
+module tb (
+    // system
+    input   clk,
+    input   rst_n,
+    input   ena,
+    // spi
+    input   spi_sck,
+    input   spi_sce,
+    input   spi_sin,
+    output  spi_sout,
+    // adc spi
+    output  adc_sck,
+    output  adc_sce,
+    input   adc_sin,
+    output  adc_sout
+);
 
     // this part dumps the trace to a vcd file that can be viewed with GTKWave
     initial begin
         $dumpfile ("tb.vcd");
         $dumpvars (0, tb);
-        #1;
+        `ifndef VERILATOR
+            #1;
+        `endif
     end
 
-    // wire up the inputs and outputs
-    reg  clk;
-    reg  rst_n;
-    reg  ena;
-    reg  [7:0] ui_in;
-    reg  [7:0] uio_in;
-
-    wire [6:0] segments = uo_out[6:0];
+    wire [7:0] ui_in = { 4'b0, adc_sin, spi_sin, spi_sce, spi_sck };
     wire [7:0] uo_out;
+    wire [7:0] uio_in = 8'b0;
     wire [7:0] uio_out;
     wire [7:0] uio_oe;
+    assign { adc_sout, adc_sce, adc_sck, spi_sout } = uo_out[3:0];
 
-    tt_um_seven_segment_seconds tt_um_seven_segment_seconds (
+    tt_um_thermocouple tt_um_thermocouple (
     // include power ports for the Gate Level test
     `ifdef GL_TEST
         .VPWR( 1'b1),
@@ -42,6 +54,6 @@ module tb ();
         .ena        (ena),      // enable - goes high when design is selected
         .clk        (clk),      // clock
         .rst_n      (rst_n)     // not reset
-        );
+    );
 
 endmodule

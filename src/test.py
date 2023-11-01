@@ -1,48 +1,96 @@
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles
+from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles, First
 
+def log_null(*args, **kwargs):
+    pass
 
-segments = [ 63, 6, 91, 79, 102, 109, 124, 7, 127, 103 ]
+class spi_bus:
+    def __init__(self, sck, sce, mosi, miso):
+        self.sck = sck
+        self.sce = sce
+        self.mosi = mosi
+        self.miso = miso
+    
+    def __str__(self) -> str:
+        return f"SPI bus sck={self.sck} sce={self.sce} mosi={self.mosi} miso={self.miso}"
 
-@cocotb.test()
-async def test_7seg(dut):
+async def setup_dut(dut):
     dut._log.info("start")
     clock = Clock(dut.clk, 10, units="us")
     cocotb.start_soon(clock.start())
 
+    # initialize inputs
+    dut.spi_sck.value = 0
+    dut.spi_sce.value = 1
+    dut.spi_sin.value = 0
+    dut.adc_sin.value = 0
+
+    spi = spi_bus(dut.spi_sck, dut.spi_sce, dut.spi_sin, dut.spi_sout)
+    adc_spi = spi_bus(dut.adc_sck, dut.adc_sce, dut.adc_sout, dut.adc_sin)
+
     # reset
     dut._log.info("reset")
     dut.rst_n.value = 0
-    # set the compare value
-    dut.ui_in.value = 1
+    dut.ena.value = 1
     await ClockCycles(dut.clk, 10)
     dut.rst_n.value = 1
 
-    # the compare value is shifted 10 bits inside the design to allow slower counting
-    max_count = dut.ui_in.value << 10
-    dut._log.info(f"check all segments with MAX_COUNT set to {max_count}")
-    # check all segments and roll over
-    for i in range(15):
-        dut._log.info("check segment {}".format(i))
-        await ClockCycles(dut.clk, max_count)
-        assert int(dut.segments.value) == segments[i % 10]
+    return spi, adc_spi
 
-        # all bidirectionals are set to output
-        assert dut.uio_oe == 0xFF
+async def spi_slave_fixed_task(spi: spi_bus, data: int, log=log_null):
+    log(f"[spi_slave_fixed_task] Start with {spi} data = {data}")
+    while True:
+        if spi.sce.value:
+            await FallingEdge(spi.sce)
+        log(f"[spi_slave_fixed_task] SCE low")
+        # shift out data
+        # cpol=0 cpha=0, msb first
+        for i in range(16):
+            # set bit
+            #log(f"[spi_slave_fixed_task] Bit {15 - i} = {(data >> (15 - i)) & 1}")
+            spi.miso.value = (data >> (15 - i)) & 1
+            # wait for next falling edge, but abort on sce rising edge
+            await First(FallingEdge(spi.sck), RisingEdge(spi.sce))
+            # if sce went high, abort this transfer
+            if spi.sce.value:
+                log(f"[spi_slave_fixed_task] SCE high, aborting")
+                break
+        log(f"[spi_slave_fixed_task] Finished transfer")
+        await Timer(1, units="us")
 
-    # reset
-    dut.rst_n.value = 0
-    # set a different compare value
-    dut.ui_in.value = 3
-    await ClockCycles(dut.clk, 10)
-    dut.rst_n.value = 1
+async def spi_master_read(spi: spi_bus, ref_clk, divider=4, bits=16, log=log_null):
+    log(f"[spi_master_read] Start with {spi}")
+    spi.sce.value = 0
+    spi.mosi.value = 0
+    spi.sck.value = 0
+    data = 0
+    for i in range(bits):
+        await ClockCycles(ref_clk, divider)
+        data = (data << 1) | spi.miso.value
+        spi.sck.value = 1
+        await ClockCycles(ref_clk, divider)
+        spi.sck.value = 0
+    spi.sce.value = 1
+    log(f"[spi_master_read] Finished transfer, read {data}")
+    return data
 
-    max_count = dut.ui_in.value << 10
-    dut._log.info(f"check all segments with MAX_COUNT set to {max_count}")
-    # check all segments and roll over
-    for i in range(15):
-        dut._log.info("check segment {}".format(i))
-        await ClockCycles(dut.clk, max_count)
-        assert int(dut.segments.value) == segments[i % 10]
+@cocotb.test()
+async def test_temp_read(dut):
+    spi, adc_spi = await setup_dut(dut)
 
+    # start adc spi fixed temperature task
+    adc_code = 0x0150 # 18mv = ~450C = 336 adc counts = 0x0150
+    adc_task = cocotb.start_soon(spi_slave_fixed_task(adc_spi, adc_code, log=dut._log.info))
+
+    # ~36 clock cycles to read from ADC
+    await ClockCycles(dut.clk, 40)
+
+    # now read value back
+    data = await spi_master_read(spi, dut.clk, divider=2, log=dut._log.info)
+    # adc_code is in section 1, so temp = 100 + 100*(adc_code - 0x0100) = 100 + 100*80 = 8100
+    # TODO: fix this when we have real values
+    assert data == 0x1FA4
+
+    adc_task.kill()
+    await ClockCycles(dut.clk, 2)

@@ -6,9 +6,11 @@ project:
 # If using an HDL, set wokwi_id as 0 and uncomment and list your source files here. 
 # Source files must be in ./src and you must list each source file separately
   source_files:        
-    - tt_um_seven_segment_seconds.v
-    - decoder.v
-  top_module:  "tt_um_seven_segment_seconds"      # Put the name of your top module here, must start with "tt_um_". Make it unique by including your github username
+    - tt_um_thermocouple.v
+    - tc_calc.v
+    - spi_slave.v
+    - spi_master.v
+  top_module:  "tt_um_thermocouple"      # Put the name of your top module here, must start with "tt_um_". Make it unique by including your github username
 
 # How many tiles your design occupies? A single tile is about 167x108 uM.
   tiles: "1x1"    # Valid values: 1x1, 1x2, 2x2, 3x2, 4x2 or 8x2
@@ -21,65 +23,62 @@ yaml_version: 4
 #
 # Here is a great example: https://github.com/davidsiaw/tt02-davidsiaw-stackcalc/blob/38c5647f83aad2aec675d566aa3d67b98f0aac81/info.yaml
 documentation: 
-  author:       "Matt Venn"      # Your name
-  title:        "7 segment seconds (Verilog Demo)"      # Project title
-  language:     "Verilog" # other examples include Verilog, Amaranth, VHDL, etc
-  description:  "Count up to 10, one second at a time."      # Short description of what your project does
+  author:       "Aidan Medcalf"
+  title:        "Thermocouple-to-temperature converter (digital backend)"
+  language:     "Verilog"
+  description:  "Converts digitized thermocouple voltage into temperature."
 
-# Longer description of how the project works. You can use standard markdown format.
   how_it_works: |
-      Uses a set of registers to divide the clock, and then some combinational logic
-      to convert from binary to decimal for the display.
+      Converts 10-bit thermocouple ADC counts into temperature by approximating the transfer function with
+      piecewise linear segments and interpolating.
 
-      Puts the bottom 8 bits of the counter on the bidirectional outputs.
+      * Interface: SPI (16-bit word)
+      * ADC interface: SPI (16-bit word, 10 bits used)
+      * Output: Temperature in celsius, 16-bit over full positive range of thermocouple type
 
-      With all the inputs set to 0, the internal 24 bit compare is set to 10,000,000. This means the
-      counter will increment by one each second.
-
-      If any inputs are non zero, then the input will be used as an bits 11 to 18 of the 24 bit compare register.
-      Example: setting the inputs to 00010000 will program 16384 into the compare register.
-      With a 10MHz clock the counter will increment ~610 times per second.
+      ADC range: 0 counts = 0 mV = 0 C, max counts (1023) = max mV = max C. Example: For type-K
+      thermocouple, 1023 counts = 54.886 mV = 1372 C
 
 # Instructions on how someone could test your project, include things like what buttons do what and how to set the clock if needed
   how_to_test:  |
-      After reset, the counter should increase by one every second with a 10MHz input clock.
-      Experiment by changing the inputs to change the counting speed.
+      Requires a thermocouple analog front-end with compatible ranging. Wait 20 clocks after reset,
+      then read 16-bit temperaute from device.
 
 # A description of what the inputs do (e.g. red button, SPI CLK, SPI MOSI, etc).
   inputs:               
-    - compare bit 11
-    - compare bit 12
-    - compare bit 13
-    - compare bit 14
-    - compare bit 15
-    - compare bit 16
-    - compare bit 17
-    - compare bit 18
+    - SCK
+    - SCE
+    - SIN
+    - ADC_SIN
+    - unused
+    - unused
+    - unused
+    - unused
 # A description of what the outputs do (e.g. status LED, SPI MISO, etc)
   outputs:
-    - segment a
-    - segment b
-    - segment c
-    - segment d
-    - segment e
-    - segment f
-    - segment g
-    - dot
+    - SOUT
+    - ADC_SCK
+    - ADC_SCE
+    - ADC_SOUT
+    - unused
+    - unused
+    - unused
+    - unused
 # A description of what the bidirectional I/O pins do (e.g. I2C SDA, I2C SCL, etc)
   bidirectional:
-    - second counter bit 0
-    - second counter bit 1
-    - second counter bit 2
-    - second counter bit 3
-    - second counter bit 4
-    - second counter bit 5
-    - second counter bit 6
-    - second counter bit 7
+    - unused
+    - unused
+    - unused
+    - unused
+    - unused
+    - unused
+    - unused
+    - unused
 
 # The following fields are optional
-  tag:          "timer, test"      # comma separated list of tags: test, encryption, experiment, clock, animation, utility, industrial, pwm, fpga, alu, microprocessor, risc, riscv, sensor, signal generator, fft, filter, music, bcd, sound, serial, timer, random number generator, calculator, decoder, counter, puzzle, multiplier, game, oscillator,
-  external_hw:  ""      # Describe any external hardware needed
-  discord:      "mattvenn"      # Your discord handle, used for communication and automatically assigning tapeout role after a submission
-  doc_link:     ""      # URL to longer form documentation, eg the README.md in your repository
+  tag:          "test, utility, industrial, sensor, serial, thermocouple, temperature"      # comma separated list of tags: test, encryption, experiment, clock, animation, utility, industrial, pwm, fpga, alu, microprocessor, risc, riscv, sensor, signal generator, fft, filter, music, bcd, sound, serial, timer, random number generator, calculator, decoder, counter, puzzle, multiplier, game, oscillator,
+  external_hw:  "Thermocouple AFE with compatible ranging, for chosen thermocouple type"      # Describe any external hardware needed
+  discord:      "pommedeterrible"      # Your discord handle, used for communication and automatically assigning tapeout role after a submission
+  doc_link:     "https://github.com/AidanMedcalf/tt05-thermocouple/blob/main/README.md"      # URL to longer form documentation, eg the README.md in your repository
   clock_hz:     10000000       # Clock frequency in Hz (if required)
   picture:      ""      # relative path to a picture in your repository (must be 512kb or less)
