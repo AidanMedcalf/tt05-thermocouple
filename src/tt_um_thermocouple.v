@@ -39,7 +39,7 @@ module tt_um_thermocouple #(
     assign uio_oe = 8'b00000000;
     assign uio_out = 'b0;
     // TODO: outputs
-    assign uio_out[7:4] = 'b0;
+    assign uo_out[7:4] = 'b0;
 
     // external clock is 10MHz
 
@@ -96,7 +96,7 @@ module tt_um_thermocouple #(
                 end
                 default: begin
                     state     <= 1'bx;
-                    adc_start <= 'bx;
+                    adc_start <= 1'bx;
                 end
             endcase
         end
