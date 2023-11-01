@@ -36,7 +36,8 @@ module spi_slave #(
         else       sck_dly <= i_sck;
 
     // counter
-    localparam [WORD_BITS:0] cnt_rst_val = WORD_SIZE - 1;
+    localparam WORD_SIZE_LESS_ONE = WORD_SIZE - 1;
+    localparam [WORD_BITS-1:0] cnt_rst_val = WORD_SIZE_LESS_ONE[WORD_BITS-1:0]; // make verilator happy
     assign o_wstb = cnt == 'b0;
     always @(posedge i_clk)
         if (i_rst || i_sce || o_wstb) cnt <= cnt_rst_val[WORD_BITS-1:0];
