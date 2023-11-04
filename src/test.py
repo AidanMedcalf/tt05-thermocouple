@@ -1,6 +1,6 @@
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles, First
+from cocotb.triggers import RisingEdge, FallingEdge, Timer, ClockCycles, First, Join
 from random import random
 
 def log_null(*args, **kwargs):
@@ -70,6 +70,21 @@ async def spi_slave_fixed_task(spi: spi_bus, data: int, log=log_null):
 
         await Timer(1, units="ns")
 
+async def spi_slave_write_expect(spi: spi_bus, exp_write_val, read_val, log=log_null):
+    log(f"[spi_slave_write_expect] Start with {spi}, {exp_write_val=}, {read_val=}")
+    if spi.sce.value:
+        await FallingEdge(spi.sce)
+    write_val = 0
+    for i in range(16):
+        spi.miso.value = (read_val >> (15 - i)) & 1
+        await RisingEdge(spi.sck)
+        write_val = (write_val << 1) | spi.mosi.value
+        await FallingEdge(spi.sck)
+    assert write_val == exp_write_val
+    if not spi.sce.value:
+        await RisingEdge(spi.sce)
+    await Timer(1, 'ns')
+
 async def with_delay(coro: cocotb.Task or cocotb.Coroutine, delay, units: str = "step"):
     await Timer(delay, units)
     return await coro
@@ -77,7 +92,7 @@ async def with_delay(coro: cocotb.Task or cocotb.Coroutine, delay, units: str = 
 def sim_period(freq: float):
     return (10*int(100000.0/freq))/1000.0 # freq (MHz) -> period (ns), rounded to 10ps
 
-async def spi_master_read(spi: spi_bus, ref_clk, bits=16, freq=1, toff=0, log=log_null):
+async def spi_master_read(spi: spi_bus, bits=16, freq=1, toff=0, log=log_null):
     log(f"[spi_master_read] Start with {spi}")
     # initialize values
     spi.sce.value = 0
@@ -103,6 +118,31 @@ async def spi_master_read(spi: spi_bus, ref_clk, bits=16, freq=1, toff=0, log=lo
     log(f"[spi_master_read] Finished transfer, read {data}")
     return data
 
+async def spi_master_write(spi: spi_bus, data, bits=16, freq=1, toff=0, log=log_null):
+    log(f"[spi_master_write] Start with {spi}")
+    log(f"[spi_master_write] Write {data}")
+    # initialize signals
+    spi.sce.value = 0
+    spi.mosi.value = (data >> (bits-1)) & 1
+    spi.sck.value = 0
+    # start clock
+    period = sim_period(freq)
+    units = 'ns'
+    delay = int(1 + period + toff) # round to 1 ns
+    #log(f"{period=}, {toff=}, {delay=}")
+    sck_task = cocotb.start_soon(with_delay(Clock(spi.sck, period, units=units).start(), delay, 'ns'))
+    # shift bits
+    for i in range(bits):
+        spi.mosi.value = (data >> (bits - 1 - i)) & 1
+        await FallingEdge(spi.sck)
+    # wait and kill clock
+    #await Timer(period, 'ns')
+    sck_task.kill()
+    # done!
+    spi.sce.value = 1
+    await Timer(1, 'ns')
+    log(f"[spi_master_write] Finished transfer")
+
 @cocotb.test()
 async def test_temp_read(dut):
     """Test temp read"""
@@ -117,7 +157,7 @@ async def test_temp_read(dut):
     await ClockCycles(dut.clk, 50)
 
     # now read value back
-    data = await spi_master_read(spi, dut.clk, log=dut._log.info)
+    data = await spi_master_read(spi, log=dut._log.info)
     # adc_code is in section 1, so temp = (33536 + 127*(adc_code - 0x0100))/4 = (33536 + 127*80)/4 = 43696/4 = 10924
     # Note: 43696 = 436.96 deg C
     assert data == 10924 # 0x2AAC
@@ -125,7 +165,7 @@ async def test_temp_read(dut):
     adc_task.kill()
     await ClockCycles(dut.clk, 2)
 
-@cocotb.test()
+@cocotb.test(skip=False)
 async def test_phase(dut):
     """Test device read with random SCK/CLK phase"""
 
@@ -143,7 +183,7 @@ async def test_phase(dut):
         # clk period is 100ns, sck period is 1000ns, so pick toff in [0, 100]ns
         toff = 100.0 * random()
         # now read value back
-        data = await spi_master_read(spi, dut.clk, toff=toff, log=dut._log.info)
+        data = await spi_master_read(spi, toff=toff, log=dut._log.info)
         # adc_code is in section 1, so temp = (33536 + 127*(adc_code - 0x0100))/4 = (33536 + 127*80)/4 = 43696/4 = 10924
         # Note: 43696 = 436.96 deg C
         assert data == 10924 # 0x2AAC
@@ -151,3 +191,30 @@ async def test_phase(dut):
 
     adc_task.kill()
     await ClockCycles(dut.clk, 2)
+
+@cocotb.test()
+async def test_passthrough(dut):
+    """Test ADC passthrough"""
+
+    spi, adc_spi = await setup_dut(dut)
+
+    # set cfg[0] (cfg_adc_passthrough)
+    # bit 15 is read/write
+    word = 0x8001
+    await spi_master_write(spi, word, log=dut._log.info)
+
+    # wait for configuration to take effect
+    await ClockCycles(dut.clk, 50)
+
+    # expect a write
+    adc_task = cocotb.start_soon(spi_slave_write_expect(adc_spi, 0x5432, 0xABCD, log=dut._log.info))
+
+    # issue the write
+    await spi_master_write(spi, 0x5432, log=dut._log.info)
+    await Join(adc_task)
+    await ClockCycles(dut.clk, 2)
+
+    # unset cfg_adc_passthrough
+    await spi_master_write(spi, 0x8000, log=dut._log.info)
+    # wait for configuration to take effect
+    await ClockCycles(dut.clk, 50)

@@ -37,28 +37,38 @@ module tt_um_thermocouple #(
 
     // external clock is 10MHz
 
+    // redirect IO on passthrough
+    wire io_adc_passthrough;
+
     // i/o assignment
     wire spi_sce, spi_sin, spi_sout, spi_sck, adc_sce, adc_sout, adc_sin, adc_sck;
     assign spi_sce    = uio_in[0];
     assign spi_sin    = uio_in[1];
-    assign uio_out[2] = spi_sout;
+    assign uio_out[2] = io_adc_passthrough ? adc_sin : spi_sout;
     assign spi_sck    = uio_in[3];
-    assign uio_out[4] = adc_sce;
-    assign uio_out[5] = adc_sout;
+    assign uio_out[4] = io_adc_passthrough ? spi_sce : adc_sce;
+    assign uio_out[5] = io_adc_passthrough ? spi_sin : adc_sout;
     assign adc_sin    = uio_in[6];
-    assign uio_out[7] = adc_sck;
+    assign uio_out[7] = io_adc_passthrough ? spi_sck : adc_sck;
 
+    // temperature
     reg           [19:0] current_temp;
     wire          [19:0] shift_temp = current_temp >> 2;
     wire [WORD_SIZE-1:0] out_temp = shift_temp[WORD_SIZE-1:0];
 
+    // spi signals
     reg  [WORD_SIZE-1:0] spi_word;
     reg                  spi_stb;
-
     reg  [WORD_SIZE-1:0] adc_word;
     reg                  adc_stb, adc_start;
 
+    // internal signals
     reg                  calc_done;
+    localparam CFG_BITS = 1;
+    reg   [CFG_BITS-1:0] cfg;
+    wire                 cfg_adc_passthrough = cfg[0];
+    wire                 read_ena = !cfg_adc_passthrough;
+    assign io_adc_passthrough = cfg_adc_passthrough;
 
     // SPI master - read from adc
     spi_master #(.WORD_SIZE(WORD_SIZE)) spi_master (
@@ -85,10 +95,9 @@ module tt_um_thermocouple #(
     localparam [0:0] READ = 1'b0,
                      CALC = 1'b1;
     reg state;
-
     always @(posedge clk) begin
         adc_start <= 'b0;
-        if (!rst_n || !ena) begin
+        if (!rst_n || !ena || !read_ena) begin
             state <= READ;
         end else begin
             case (state)
@@ -106,6 +115,18 @@ module tt_um_thermocouple #(
                     adc_start <= 1'bx;
                 end
             endcase
+        end
+    end
+
+    // configuration
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            cfg <= 'b0;
+        end else if (spi_stb) begin
+            // if write
+            if (spi_word[WORD_SIZE-1]) begin
+                cfg <= spi_word[CFG_BITS-1:0];
+            end
         end
     end
 
