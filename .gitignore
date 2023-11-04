@@ -3,6 +3,7 @@
 .vscode
 *.vcd
 __pycache__/
+venv/
 runs
 src/sim_build
 src/__pycache__/
