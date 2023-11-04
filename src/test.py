@@ -150,7 +150,9 @@ async def test_temp_read(dut):
     spi, adc_spi = await setup_dut(dut)
 
     # start adc spi fixed temperature task
-    adc_code = 0x0150 # 18mv = ~450C = 336 adc counts = 0x0150
+    # K: 18mv = ~450C = 336 adc counts = 0x0150
+    # J: 10mv = ~190C = 336 adc counts = 0x0150
+    adc_code = 0x0150 
     adc_task = cocotb.start_soon(spi_slave_fixed_task(adc_spi, adc_code, log=dut._log.info))
 
     # ~36 clock cycles to read from ADC
@@ -158,9 +160,11 @@ async def test_temp_read(dut):
 
     # now read value back
     data = await spi_master_read(spi, log=dut._log.info)
-    # adc_code is in section 1, so temp = (33536 + 127*(adc_code - 0x0100))/4 = (33536 + 127*80)/4 = 43696/4 = 10924
-    # Note: 43696 = 436.96 deg C
-    assert data == 10924 # 0x2AAC
+    # K: adc_code is in section 1, so temp = (33536 + 127*(adc_code - 0x0100))/4 = (33536 + 127*80)/4 = 43696/4 = 10924
+    # K: Note: 43696 = 436.96 deg C
+    # J: adc_code is in section 1, so temp = (31825 + 121*(adc_code - 0x0100))/4 = (31825 + 121*80)/4 = 41505/4 = 10376
+    # J: Note: 41505 = 415.05 deg C
+    assert data == 10376 # K: 10924 # 0x2AAC
 
     adc_task.kill()
     await ClockCycles(dut.clk, 2)
@@ -186,7 +190,7 @@ async def test_phase(dut):
         data = await spi_master_read(spi, toff=toff, log=dut._log.info)
         # adc_code is in section 1, so temp = (33536 + 127*(adc_code - 0x0100))/4 = (33536 + 127*80)/4 = 43696/4 = 10924
         # Note: 43696 = 436.96 deg C
-        assert data == 10924 # 0x2AAC
+        assert data == 10376 # K: 10924 # 0x2AAC
         await Timer(1, 'us')
 
     adc_task.kill()
@@ -218,3 +222,39 @@ async def test_passthrough(dut):
     await spi_master_write(spi, 0x8000, log=dut._log.info)
     # wait for configuration to take effect
     await ClockCycles(dut.clk, 50)
+
+@cocotb.test()
+async def test_set_type(dut):
+    """Test changing tc type"""
+
+    spi, adc_spi = await setup_dut(dut)
+
+    # start adc spi fixed temperature task
+    # K: 18mv = ~450C = 336 adc counts = 0x0150
+    # J: 10mv = ~190C = 336 adc counts = 0x0150
+    adc_code = 0x0150 
+    adc_task = cocotb.start_soon(spi_slave_fixed_task(adc_spi, adc_code, log=dut._log.info))
+
+    # ~36 clock cycles to read from ADC
+    await ClockCycles(dut.clk, 50)
+
+    # read value
+    data = await spi_master_read(spi, log=dut._log.info)
+    # K: adc_code is in section 1, so temp = (33536 + 127*(adc_code - 0x0100))/4 = (33536 + 127*80)/4 = 43696/4 = 10924
+    # K: Note: 43696 = 436.96 deg C
+    # J: adc_code is in section 1, so temp = (31825 + 121*(adc_code - 0x0100))/4 = (31825 + 121*80)/4 = 41505/4 = 10376
+    # J: Note: 41505 = 415.05 deg C
+    assert data == 10376 # K: 10924 # 0x2AAC
+    await ClockCycles(dut.clk, 10)
+
+    # now change to type K
+    await spi_master_write(spi, 0x8002, log=dut._log.info)
+    # wait for configuration to take effect
+    await ClockCycles(dut.clk, 100)
+
+    # read again
+    data = await spi_master_read(spi, log=dut._log.info)
+    assert data == 10924 # 0x2AAC
+
+    adc_task.kill()
+    await ClockCycles(dut.clk, 2)

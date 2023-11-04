@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import thermocouple
 
-tc_type = 'K'
+tc_type = 'J'
 lin_sections = 4
 
 # find tc
@@ -15,6 +15,8 @@ for t in thermocouple.all_types:
         tc = t
         break
 assert tc is not None, f"Could not find coefficients for thermocouple type '{tc_type}'"
+
+print(f"Type-{tc_type}")
 
 # calculate lin_sections linear sections
 # we need lin_sections+1 evenly spaced points, including the end points

@@ -3,11 +3,11 @@
 
 `default_nettype none
 
-// currently: type K only
+// Example: Type-K
 // assuming a 10-bit ADC from 0 to ~56mV, i.e. 0C to 1379C
-// 8 linear approximate sections:
-// 1 determine section
-// 2 linearly interpolate
+// 4 linear approximate sections:
+// 1. determine section
+// 2. linearly interpolate
 
 module tc_calc (
     input  i_clk,
@@ -15,6 +15,7 @@ module tc_calc (
 
     input             i_start,
     input       [9:0] i_code,
+    input       [0:0] i_type,
     output reg [19:0] o_temp,
     output reg        o_done
 );
@@ -24,7 +25,15 @@ module tc_calc (
     reg [1:0] cs;
     reg [7:0] cv;
 
-    /*
+    /* Type-J
+     *     0,       0,  125
+     *   255,   31825,  121
+     *   511,   62783,  108
+     *   767,   90432,  115
+     *  1023,  119996
+     */
+
+    /* Type-K
      *     0,       0,  132
      *   255,   33536,  127
      *   511,   65924,  132
@@ -33,18 +42,32 @@ module tc_calc (
      */
 
     // interpolation coefficient ROM
+    // 0 Type-J
     // slope
-    wire [19:0] crom_slope [4];
-    assign crom_slope[0] = 20'd132;
-    assign crom_slope[1] = 20'd127;
-    assign crom_slope[2] = 20'd132;
-    assign crom_slope[3] = 20'd147;
+    wire [19:0] crom_slope_0 [4];
+    assign crom_slope_0[0] = 20'd125;
+    assign crom_slope_0[1] = 20'd121;
+    assign crom_slope_0[2] = 20'd108;
+    assign crom_slope_0[3] = 20'd115;
     // intercept
-    wire [19:0] crom_intercept [4];
-    assign crom_intercept[0] = 20'd0;
-    assign crom_intercept[1] = 20'd33536;
-    assign crom_intercept[2] = 20'd65924;
-    assign crom_intercept[3] = 20'd99678;
+    wire [19:0] crom_intercept_0 [4];
+    assign crom_intercept_0[0] = 20'd0;
+    assign crom_intercept_0[1] = 20'd31825;
+    assign crom_intercept_0[2] = 20'd62783;
+    assign crom_intercept_0[3] = 20'd90432;
+    // 1 Type-K
+    // slope
+    wire [19:0] crom_slope_1 [4];
+    assign crom_slope_1[0] = 20'd132;
+    assign crom_slope_1[1] = 20'd127;
+    assign crom_slope_1[2] = 20'd132;
+    assign crom_slope_1[3] = 20'd147;
+    // intercept
+    wire [19:0] crom_intercept_1 [4];
+    assign crom_intercept_1[0] = 20'd0;
+    assign crom_intercept_1[1] = 20'd33536;
+    assign crom_intercept_1[2] = 20'd65924;
+    assign crom_intercept_1[3] = 20'd99678;
 
     localparam [1:0] IDLE = 2'b00,
                      LOAD = 2'b01,
@@ -71,8 +94,20 @@ module tc_calc (
             end
             LOAD: begin
                 state  <= CALC;
-                active_slope     <= crom_slope[cs];
-                active_intercept <= crom_intercept[cs];
+                case (i_type)
+                    1'b0: begin // Type-J
+                        active_slope     <= crom_slope_0[cs];
+                        active_intercept <= crom_intercept_0[cs];
+                    end
+                    1'b1: begin // Type-K
+                        active_slope     <= crom_slope_1[cs];
+                        active_intercept <= crom_intercept_1[cs];
+                    end
+                    default: begin
+                        active_slope     <= 20'bx;
+                        active_intercept <= 20'bx;
+                    end
+                endcase
             end
             CALC: begin
                 state  <= IDLE;

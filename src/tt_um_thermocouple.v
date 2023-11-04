@@ -64,9 +64,10 @@ module tt_um_thermocouple #(
 
     // internal signals
     reg                  calc_done;
-    localparam CFG_BITS = 1;
+    localparam CFG_BITS = 2;
     reg   [CFG_BITS-1:0] cfg;
     wire                 cfg_adc_passthrough = cfg[0];
+    wire           [0:0] cfg_tc_type         = cfg[1:1];
     wire                 read_ena = !cfg_adc_passthrough;
     assign io_adc_passthrough = cfg_adc_passthrough;
 
@@ -87,7 +88,7 @@ module tt_um_thermocouple #(
     // calculator
     tc_calc tc_calc (
         .i_clk(clk), .i_rst(!rst_n || !ena),
-        .i_start(adc_stb), .i_code(adc_word[9:0]),
+        .i_start(adc_stb), .i_code(adc_word[9:0]), .i_type(cfg_tc_type),
         .o_temp(current_temp), .o_done(calc_done)
     );
 
