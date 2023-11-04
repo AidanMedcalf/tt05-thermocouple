@@ -45,7 +45,8 @@ module spi_slave #(
     // counter
     localparam WORD_SIZE_LESS_ONE = WORD_SIZE - 1;
     localparam [WORD_BITS-1:0] cnt_rst_val = WORD_SIZE_LESS_ONE[WORD_BITS-1:0]; // make verilator happy
-    assign o_wstb = cnt == 'b0;
+    wire last_cycle = cnt == 'b0;
+    assign o_wstb = last_cycle && sck_ne;
     always @(posedge i_clk)
         if (i_rst || sce || o_wstb) cnt <= cnt_rst_val[WORD_BITS-1:0];
         else if (sck_ne)            cnt <= cnt - 'b1;
@@ -56,6 +57,6 @@ module spi_slave #(
     // serial in
     always @(posedge i_clk)
         if (i_rst)               o_wout <= 'b0;
-        else if (sck_pe && !sce) o_wout <= { i_sin, o_wout[WORD_SIZE-1:1] };
+        else if (sck_pe && !sce) o_wout <= { o_wout[WORD_SIZE-2:0], i_sin };
 
 endmodule
