@@ -88,9 +88,9 @@ async def test_temp_read(dut):
 
     # now read value back
     data = await spi_master_read(spi, dut.clk, divider=2, log=dut._log.info)
-    # adc_code is in section 1, so temp = 100 + 100*(adc_code - 0x0100) = 100 + 100*80 = 8100
-    # TODO: fix this when we have real values
-    assert data == 0x1FA4
+    # adc_code is in section 1, so temp = (33536 + 127*(adc_code - 0x0100))/4 = (33536 + 127*80)/4 = 43696/4 = 10924
+    # Note: 43696 = 436.96 deg C
+    assert data == 10924 # 0x2AAC
 
     adc_task.kill()
     await ClockCycles(dut.clk, 2)

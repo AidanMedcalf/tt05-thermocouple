@@ -15,7 +15,7 @@ module tc_calc (
 
     input             i_start,
     input       [9:0] i_code,
-    output reg [15:0] o_temp,
+    output reg [19:0] o_temp,
     output reg        o_done
 );
 
@@ -24,27 +24,35 @@ module tc_calc (
     reg [1:0] cs;
     reg [7:0] cv;
 
+    /*
+     *     0,       0,  132
+     *   255,   33536,  127
+     *   511,   65924,  132
+     *   767,   99678,  147
+     *  1023,  137204
+     */
+
     // interpolation coefficient ROM
     // slope
-    wire [15:0] crom_slope [4];
-    assign crom_slope[0] = 100;
-    assign crom_slope[1] = 100;
-    assign crom_slope[2] = 100;
-    assign crom_slope[3] = 100;
+    wire [19:0] crom_slope [4];
+    assign crom_slope[0] = 20'd132;
+    assign crom_slope[1] = 20'd127;
+    assign crom_slope[2] = 20'd132;
+    assign crom_slope[3] = 20'd147;
     // intercept
-    wire [15:0] crom_intercept [4];
-    assign crom_intercept[0] = 0;
-    assign crom_intercept[1] = 100;
-    assign crom_intercept[2] = 200;
-    assign crom_intercept[3] = 300;
+    wire [19:0] crom_intercept [4];
+    assign crom_intercept[0] = 20'd0;
+    assign crom_intercept[1] = 20'd33536;
+    assign crom_intercept[2] = 20'd65924;
+    assign crom_intercept[3] = 20'd99678;
 
     localparam [1:0] IDLE = 2'b00,
                      LOAD = 2'b01,
                      CALC = 2'b10;
     reg [1:0] state;
 
-    reg [15:0] active_slope;
-    reg [15:0] active_intercept;
+    reg [19:0] active_slope;
+    reg [19:0] active_intercept;
     always @(posedge i_clk) begin
         o_done <= 'b0;
         if (i_rst) begin
@@ -68,7 +76,7 @@ module tc_calc (
             end
             CALC: begin
                 state  <= IDLE;
-                o_temp <= active_intercept + active_slope * cv;
+                o_temp <= active_intercept + active_slope * {12'b0, cv};
                 o_done <= 'b1;
             end
             default: begin

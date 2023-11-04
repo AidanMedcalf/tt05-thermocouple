@@ -48,15 +48,17 @@ module tt_um_thermocouple #(
     assign adc_sin    = uio_in[6];
     assign uio_out[7] = adc_sck;
 
-    reg [WORD_SIZE-1:0] current_temp;
+    reg           [19:0] current_temp;
+    wire          [19:0] shift_temp = current_temp >> 2;
+    wire [WORD_SIZE-1:0] out_temp = shift_temp[WORD_SIZE-1:0];
 
-    reg [WORD_SIZE-1:0] spi_word;
-    reg                 spi_stb;
+    reg  [WORD_SIZE-1:0] spi_word;
+    reg                  spi_stb;
 
-    reg [WORD_SIZE-1:0] adc_word;
-    reg                 adc_stb, adc_start;
+    reg  [WORD_SIZE-1:0] adc_word;
+    reg                  adc_stb, adc_start;
 
-    reg                 calc_done;
+    reg                  calc_done;
 
     // SPI master - read from adc
     spi_master #(.WORD_SIZE(WORD_SIZE)) spi_master (
@@ -69,7 +71,7 @@ module tt_um_thermocouple #(
     spi_slave #(.WORD_SIZE(WORD_SIZE)) spi_slave (
         .i_clk(clk), .i_rst(!rst_n || !ena),
         .i_sck(spi_sck), .i_sce(spi_sce), .i_sin(spi_sin), .o_sout(spi_sout),
-        .i_win(current_temp), .o_wout(spi_word), .o_wstb(spi_stb)
+        .i_win(out_temp), .o_wout(spi_word), .o_wstb(spi_stb)
     );
 
     // calculator
