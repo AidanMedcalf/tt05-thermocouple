@@ -8,7 +8,6 @@ module spi_slave #(
     parameter integer WORD_SIZE = 16,
     parameter integer WORD_BITS = $clog2(WORD_SIZE)
 ) (
-    // NOTE: all TT IO are synchronous to i_clk
     input                      i_clk,
     input                      i_rst,
     // serial interface
@@ -22,33 +21,41 @@ module spi_slave #(
     output                     o_wstb
 );
 
-    // serial clock
-    reg                  sck_dly;
-    wire                 sck_pe, sck_ne;
+    // sync sck
+    reg [2:0] sck_sync;
+    //wire      sck    = sck_sync[1];
+    wire      sck_pe =  sck_sync[1] && !sck_sync[2];
+    wire      sck_ne = !sck_sync[1] &&  sck_sync[2];
+    always @(posedge i_clk)
+        if (i_rst) sck_sync <= 3'b0;
+        else       sck_sync <= { sck_sync[1:0], i_sck };
+
+    // sync sce
+    reg [1:0] sce_sync;
+    wire      sce    = sce_sync[1];
+    //wire      sce_pe =  sce_sync[1] && !sce_sync[2];
+    //wire      sce_ne = !sce_sync[1] &&  sce_sync[2];
+    always @(posedge i_clk)
+        if (i_rst) sce_sync <= 2'b0;
+        else       sce_sync <= { sce_sync[0:0], i_sce };
+
     // bit counter
     reg  [WORD_BITS-1:0] cnt;     // SPI bit counter
-
-    // serial clock
-    assign sck_pe =  i_sck && !sck_dly;
-    assign sck_ne = !i_sck &&  sck_dly;
-    always @(posedge i_clk)
-        if (i_rst) sck_dly <= 'b0;
-        else       sck_dly <= i_sck;
 
     // counter
     localparam WORD_SIZE_LESS_ONE = WORD_SIZE - 1;
     localparam [WORD_BITS-1:0] cnt_rst_val = WORD_SIZE_LESS_ONE[WORD_BITS-1:0]; // make verilator happy
     assign o_wstb = cnt == 'b0;
     always @(posedge i_clk)
-        if (i_rst || i_sce || o_wstb) cnt <= cnt_rst_val[WORD_BITS-1:0];
-        else if (sck_ne)              cnt <= cnt - 'b1;
+        if (i_rst || sce || o_wstb) cnt <= cnt_rst_val[WORD_BITS-1:0];
+        else if (sck_ne)            cnt <= cnt - 'b1;
 
     // serial out
     assign o_sout = i_win[cnt];
 
     // serial in
     always @(posedge i_clk)
-        if (i_rst)                 o_wout <= 'b0;
-        else if (sck_pe && !i_sce) o_wout <= { i_sin, o_wout[WORD_SIZE-1:1] };
+        if (i_rst)               o_wout <= 'b0;
+        else if (sck_pe && !sce) o_wout <= { i_sin, o_wout[WORD_SIZE-1:1] };
 
 endmodule

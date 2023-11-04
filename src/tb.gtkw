@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
-[*] Wed Nov  1 16:31:44 2023
+[*] Sat Nov  4 03:12:18 2023
 [*]
 [dumpfile] "/home/amedcalf/projects/tt05-thermocouple/src/tb.vcd"
-[dumpfile_mtime] "Wed Nov  1 16:29:45 2023"
-[dumpfile_size] 9305
+[dumpfile_mtime] "Sat Nov  4 03:08:37 2023"
+[dumpfile_size] 18468
 [savefile] "/home/amedcalf/projects/tt05-thermocouple/src/tb.gtkw"
 [timestart] 0
 [size] 1388 808
 [pos] -1 -1
-*-27.866255 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+*-21.229134 8100000 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
 [treeopen] tb.
 [treeopen] tb.tt_um_thermocouple.
 [sst_width] 297
@@ -34,14 +34,17 @@ tb.adc_sce
 tb.adc_sck
 tb.adc_sin
 tb.adc_sout
+@25
+tb.tt_um_thermocouple.spi_master.cnt[31:0]
 @200
 -
+@22
+tb.tt_um_thermocouple.current_temp[19:0]
+tb.tt_um_thermocouple.out_temp[15:0]
 @28
 tb.tt_um_thermocouple.state
 @22
-tb.tt_um_thermocouple.current_temp[15:0]
 tb.tt_um_thermocouple.spi_word[15:0]
-@23
 tb.tt_um_thermocouple.adc_word[15:0]
 @200
 -
